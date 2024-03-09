@@ -8,6 +8,8 @@ interface ServerPeer {
   id: string;
   rooms: Set<string>;
   lastPing: number;
+  // handshake protocol
+  code: number;
 }
 
 export type SimplePeerInitMessage = {
@@ -33,20 +35,41 @@ export type SimplePeerPingMessage = {
   type: "ping";
 };
 
+export type HandshakeInitMessage = {
+  type: "handshake-begin";
+};
+export type HandshakeResponseMessage = {
+  type: "handshake-response";
+  yourId: string;
+  code: number;
+};
+export type HandshakeJoinMessage = {
+  type: "handshake-join";
+  code: number;
+};
+export type HandshakeCompleteMessage = {
+  type: "handshake-complete";
+  yourId: string;
+  otherId: string;
+};
+
 export type PeerMessage =
   // These Need to stay compatible with rxdb-plugin-replication-webrtc
   | SimplePeerInitMessage
   | SimplePeerJoinMessage
   | SimplePeerJoinedMessage
   | SimplePeerSignalMessage
-  | SimplePeerPingMessage;
+  | SimplePeerPingMessage
   // These are my extensions for the pre-replication handshake
-  // | SimplePeerHandshakeInitMessage
-  // | SimplePeerHandshakeJoinMessage
-  // | SimplePeerHandshakeResponseMessage
+  | HandshakeInitMessage
+  | HandshakeJoinMessage
+  | HandshakeResponseMessage
+  | HandshakeCompleteMessage;
 
 const peerById = new Map<string, ServerWebSocket<ServerPeer>>();
 const peersByRoom = new Map<string, Set<string>>();
+
+const peerByHandshake = new Map<number, ServerWebSocket<ServerPeer>>();
 
 const server = Bun.serve<ServerPeer>({
   port: PORT,
@@ -73,34 +96,76 @@ const server = Bun.serve<ServerPeer>({
       const type = message.type;
       switch (type) {
         case "join":
-          const roomId = message.room;
-          if (!uuid.validate(roomId)) {
-            ws.close(undefined, "Invalid ID");
-            return;
+          {
+            const roomId = message.room;
+            if (!uuid.validate(roomId)) {
+              ws.close(undefined, "Invalid ID");
+              return;
+            }
+            peer.rooms.add(roomId);
+            let room = peersByRoom.get(roomId);
+            if (!room) {
+              room = new Set();
+              peersByRoom.set(roomId, room);
+            }
+            room.add(peerId);
+            ws.subscribe(roomId);
+            server.publish(
+              roomId,
+              JSON.stringify({ type: "joined", otherPeerIds: Array.from(room) })
+            );
           }
-          peer.rooms.add(roomId);
-          let room = peersByRoom.get(roomId);
-          if (!room) {
-            room = new Set();
-            peersByRoom.set(roomId, room);
-          }
-          room.add(peerId);
-          ws.subscribe(roomId);
-          server.publish(
-            roomId,
-            JSON.stringify({ type: "joined", otherPeerIds: Array.from(room) })
-          );
           break;
         case "signal":
-          if (message.senderPeerId !== peerId) {
-            return;
-          }
-          const receiver = peerById.get(message.receiverPeerId);
-          if (receiver) {
-            sendMessage(receiver, message);
+          {
+            if (message.senderPeerId !== peerId) {
+              return;
+            }
+            const receiver = peerById.get(message.receiverPeerId);
+            if (receiver) {
+              sendMessage(receiver, message);
+            }
           }
           break;
         case "ping":
+          break;
+
+        // handshake protocol
+        case "handshake-begin":
+          {
+            let code;
+            do {
+              code = Math.floor(Math.random() * 9999);
+            } while (peerByHandshake.has(code));
+
+            peer.code = code;
+            peerByHandshake.set(code, ws);
+
+            sendMessage(ws, {
+              type: "handshake-response",
+              yourId: peerId,
+              code: code,
+            });
+          }
+          break;
+        case "handshake-join":
+          {
+            const code = message.code;
+            const peer = peerByHandshake.get(code);
+            if (peer) {
+              sendMessage(ws, {
+                type: "handshake-complete",
+                yourId: ws.data.id,
+                otherId: peer.data.id,
+              });
+              sendMessage(peer, {
+                type: "handshake-complete",
+                yourId: peer.data.id,
+                otherId: ws.data.id,
+              });
+              peerByHandshake.delete(code);
+            }
+          }
           break;
         default:
       }
@@ -121,6 +186,8 @@ const server = Bun.serve<ServerPeer>({
         ws.unsubscribe(roomId);
       });
       peerById.delete(peerId);
+      // cleanup from unfinished handshake
+      peerByHandshake.delete(peer.code);
     },
   },
 });
@@ -130,4 +197,4 @@ function sendMessage(ws: ServerWebSocket<ServerPeer>, msg: PeerMessage) {
   ws.send(message);
 }
 
-console.log(`[${NODE_ENV}] Serving http://localhost:${server.port}`);
+console.log(`[${NODE_ENV}] Serving ws://localhost:${server.port}`);
