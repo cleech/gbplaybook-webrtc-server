@@ -85,7 +85,7 @@ const server = Bun.serve<ServerPeer>({
     ) {
       return;
     }
-    return new Response(null, { status: 404 });
+    return new Response(null, { status: 204 });
   },
   websocket: {
     message(ws, msg: string) {
