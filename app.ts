@@ -107,6 +107,7 @@ const server = Bun.serve<ServerPeer>({
             if (!room) {
               room = new Set();
               peersByRoom.set(roomId, room);
+              console.log(`% Active Count + : ${peersByRoom.size}`);
             }
             room.add(peerId);
             ws.subscribe(roomId);
@@ -184,6 +185,10 @@ const server = Bun.serve<ServerPeer>({
         const room = peersByRoom.get(roomId);
         room?.delete(peerId);
         ws.unsubscribe(roomId);
+        if (room?.size === 0) {
+          peersByRoom.delete(roomId);
+          console.log(`% Active Count - : ${peersByRoom.size}`);
+        }
       });
       peerById.delete(peerId);
       // cleanup from unfinished handshake
