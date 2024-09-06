@@ -10,12 +10,12 @@
   },
   "devDependencies": {
     "@types/bun": "latest",
-    "@types/uuid": "^9.0.8"
+    "@types/uuid": "^10.0.0"
   },
   "peerDependencies": {
-    "typescript": "^5.0.0"
+    "typescript": "^5.5.4"
   },
   "dependencies": {
-    "uuid": "^9.0.1"
+    "uuid": "^10.0.0"
   }
 }
