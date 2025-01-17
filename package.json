@@ -9,12 +9,12 @@
     "dev": "bun --hot app.ts"
   },
   "devDependencies": {
-    "@types/bun": "^1.1.13"
+    "@types/bun": "^1.1.17"
   },
   "peerDependencies": {
-    "typescript": "^5.6.3"
+    "typescript": "^5.7.3"
   },
   "dependencies": {
-    "uuid": "^11.0.3"
+    "uuid": "^11.0.5"
   }
 }
