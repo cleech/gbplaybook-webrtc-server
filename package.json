@@ -9,7 +9,7 @@
     "dev": "bun --hot app.ts"
   },
   "devDependencies": {
-    "@types/bun": "^1.2.0"
+    "@types/bun": "^1.2.8"
   },
   "peerDependencies": {
     "typescript": "^5.7.3"
