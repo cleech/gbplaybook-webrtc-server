@@ -71,7 +71,7 @@ const peersByRoom = new Map<string, Set<string>>();
 
 const peerByHandshake = new Map<number, ServerWebSocket<ServerPeer>>();
 
-const server = Bun.serve<ServerPeer>({
+const server = Bun.serve<ServerPeer, null>({
   port: PORT,
   fetch(req, server) {
     if (
