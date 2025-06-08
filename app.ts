@@ -98,6 +98,7 @@ const server = Bun.serve<ServerPeer, null>({
         case "join":
           {
             const roomId = message.room;
+            let newRoom = false;
             if (!uuid.validate(roomId)) {
               ws.close(undefined, "Invalid ID");
               return;
@@ -105,10 +106,20 @@ const server = Bun.serve<ServerPeer, null>({
             peer.rooms.add(roomId);
             let room = peersByRoom.get(roomId);
             if (!room) {
+              newRoom = true;
               room = new Set();
               peersByRoom.set(roomId, room);
-              console.log(`% Active Count + : ${peersByRoom.size}`);
             }
+            console.log(`% Active Game Count + : ${peersByRoom.size}`);
+            peersByRoom.forEach((peers, gid) => {
+              console.log(`  ${newRoom && (gid === roomId) ? '+' : ''}${gid}:`);
+              if (gid === roomId) {
+                console.log(`    +${peerId}`);
+              }
+              peers.forEach((uid) => {
+                console.log(`     ${uid}`);
+              });
+            });
             room.add(peerId);
             ws.subscribe(roomId);
             server.publish(
@@ -154,6 +165,9 @@ const server = Bun.serve<ServerPeer, null>({
             const code = message.code;
             const peer = peerByHandshake.get(code);
             if (peer) {
+              console.log(`% Pairing success: ${code}`);
+              console.log(`  ${peer.data.id}`);
+              console.log(`  ${ws.data.id}`);
               sendMessage(ws, {
                 type: "handshake-complete",
                 yourId: ws.data.id,
@@ -173,22 +187,32 @@ const server = Bun.serve<ServerPeer, null>({
     },
     open(ws) {
       const peerId = ws.data.id;
-      console.log(`# connected peer ${peerId}`);
+      // console.log(`# connected peer ${peerId}`);
       peerById.set(peerId, ws);
       sendMessage(ws, { type: "init", yourPeerId: peerId });
     },
-    close(ws, code, reason) {
+    close(ws, _code, _reason) {
       const peer = ws.data;
       const peerId = peer.id;
-      console.log(`# disconnect peer ${peerId} reason: ${reason}`);
+      // console.log(`# disconnect peer ${peerId} reason: ${reason}`);
       peer.rooms.forEach((roomId) => {
         const room = peersByRoom.get(roomId);
         room?.delete(peerId);
+        const deleteRoom = room?.size === 0;
         ws.unsubscribe(roomId);
-        if (room?.size === 0) {
+        console.log(`% Active Game Count - : ${peersByRoom.size - (deleteRoom ? 1 : 0)}`);
+        peersByRoom.forEach((peers, gid) => {
+          console.log(`  ${deleteRoom && (gid === roomId) ? '-' : ''}${gid}:`);
+          if (gid === roomId) {
+            console.log(`    -${peerId}`);
+          }
+          peers.forEach((uid) => {
+            console.log(`     ${uid}`);
+          });
+        });
+        if (deleteRoom) {
           peersByRoom.delete(roomId);
-          console.log(`% Active Count - : ${peersByRoom.size}`);
-        }
+        };
       });
       peerById.delete(peerId);
       // cleanup from unfinished handshake
