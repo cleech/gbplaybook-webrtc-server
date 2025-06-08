@@ -74,10 +74,15 @@ const peerByHandshake = new Map<number, ServerWebSocket<ServerPeer>>();
 const server = Bun.serve<ServerPeer, null>({
   port: PORT,
   fetch(req, server) {
+    const cookies = new Bun.CookieMap(req.headers.get("Cookie") || '');
+    const uid = cookies.get('uid') || uuid.v4();
     if (
       server.upgrade(req, {
+        headers: {
+          'Set-Cookie': `uid=${uid}; HttpOnly; SameSite=none; Secure`,
+        },
         data: {
-          id: uuid.v4(),
+          id: uid,
           rooms: new Set(),
           lastPing: Date.now(),
         },
